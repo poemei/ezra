@@ -7,16 +7,16 @@
 
 static int audit(const char *event, const char *detail)
 {
-    return ezra_log_event("MODULE", event, detail) && ezra_log_sync();
+    return stnlabz_log_event("MODULE", event, detail) && stnlabz_log_sync();
 }
 
-int ezra_core_discover(stnlabz_module_registry_t *registry,
+int stnlabz_core_discover(stnlabz_module_registry_t *registry,
     stnlabz_module_loader_t *loader, const char *path,
     stnlabz_module_discovery_report_t *report)
 {
     stnlabz_module_result_t rc;
     char detail[512];
-    if (!registry || !loader || !path || !report || !ezra_log_is_open())
+    if (!registry || !loader || !path || !report || !stnlabz_log_is_open())
         return 0;
     {
         struct stat st;
@@ -76,11 +76,11 @@ int ezra_core_discover(stnlabz_module_registry_t *registry,
     return 1;
 }
 
-int ezra_core_verify(stnlabz_module_registry_t *registry)
+int stnlabz_core_verify(stnlabz_module_registry_t *registry)
 {
     size_t i;
     char detail[320];
-    if (!registry || !ezra_log_is_open()) return 0;
+    if (!registry || !stnlabz_log_is_open()) return 0;
     for (i = 0; i < registry->count; ++i) {
         stnlabz_module_record_t *r = &registry->modules[i];
         stnlabz_module_result_t result;
@@ -103,11 +103,11 @@ int ezra_core_verify(stnlabz_module_registry_t *registry)
     return 1;
 }
 
-int ezra_core_qualify(stnlabz_module_registry_t *registry)
+int stnlabz_core_qualify(stnlabz_module_registry_t *registry)
 {
     size_t i;
     char detail[384];
-    if (!registry || !ezra_log_is_open()) return 0;
+    if (!registry || !stnlabz_log_is_open()) return 0;
     for (i = 0; i < registry->count; ++i) {
         stnlabz_module_record_t *r = &registry->modules[i];
         stnlabz_module_result_t result;
@@ -132,7 +132,7 @@ int ezra_core_qualify(stnlabz_module_registry_t *registry)
     return 1;
 }
 
-void ezra_core_discovery_cleanup(stnlabz_module_registry_t *registry,
+void stnlabz_core_discovery_cleanup(stnlabz_module_registry_t *registry,
     stnlabz_module_loader_t *loader)
 {
     if (!registry || !loader) return;

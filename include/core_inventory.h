@@ -1,5 +1,5 @@
-#ifndef EZRA_CORE_INVENTORY_H
-#define EZRA_CORE_INVENTORY_H
+#ifndef STNLABZ_CORE_INVENTORY_H
+#define STNLABZ_CORE_INVENTORY_H
 #include <stddef.h>
 #include "stnlabz_abi/module_registry.h"
 
@@ -15,13 +15,13 @@ typedef struct {
     int active;
     /* The registry does not retain failure causes. Do not invent them. */
     const char *failure_reason;
-} ezra_core_inventory_entry_t;
+} stnlabz_core_inventory_entry_t;
 
-size_t ezra_core_inventory_count(const stnlabz_module_registry_t *registry);
-int ezra_core_inventory_get(const stnlabz_module_registry_t *registry,
-    size_t index, ezra_core_inventory_entry_t *out);
-int ezra_core_inventory_find(const stnlabz_module_registry_t *registry,
-    const char *module_id, ezra_core_inventory_entry_t *out);
+size_t stnlabz_core_inventory_count(const stnlabz_module_registry_t *registry);
+int stnlabz_core_inventory_get(const stnlabz_module_registry_t *registry,
+    size_t index, stnlabz_core_inventory_entry_t *out);
+int stnlabz_core_inventory_find(const stnlabz_module_registry_t *registry,
+    const char *module_id, stnlabz_core_inventory_entry_t *out);
 /* Optional audited snapshot, no changes to registry or module lifecycle. */
-int ezra_core_inventory_log(const stnlabz_module_registry_t *registry);
+int stnlabz_core_inventory_log(const stnlabz_module_registry_t *registry);
 #endif

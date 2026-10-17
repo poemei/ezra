@@ -8,68 +8,68 @@
 #include <stdio.h>
 
 /* Core lifecycle; no module manager or hotload dependency. */
-static volatile sig_atomic_t ezra_stop_requested = 0;
+static volatile sig_atomic_t stnlabz_stop_requested = 0;
 
-static void ezra_runtime_signal_handler(int signal_number)
+static void stnlabz_runtime_signal_handler(int signal_number)
 {
     (void)signal_number;
-    ezra_stop_requested = 1;
+    stnlabz_stop_requested = 1;
 }
-void ezra_runtime_request_stop(void) { ezra_stop_requested = 1; }
+void stnlabz_runtime_request_stop(void) { stnlabz_stop_requested = 1; }
 
-void ezra_runtime_init(ezra_runtime_t *runtime)
+void stnlabz_runtime_init(stnlabz_runtime_t *runtime)
 {
     if (!runtime) return;
     runtime->running = 0;
-    runtime->operational_state = EZRA_OPERATIONAL_NORMAL;
-    runtime->preservation_cause = EZRA_FAULT_SYSTEM;
+    runtime->operational_state = STNLABZ_OPERATIONAL_NORMAL;
+    runtime->preservation_cause = STNLABZ_FAULT_SYSTEM;
     runtime->preservation_cause_set = 0;
     runtime->module_poll = NULL;
     runtime->module_poll_context = NULL;
-    if (ezra_log_is_open()) (void)ezra_log_event("RUNTIME", "INITIALIZED", "state=normal");
+    if (stnlabz_log_is_open()) (void)stnlabz_log_event("RUNTIME", "INITIALIZED", "state=normal");
 }
-int ezra_runtime_report_fault(ezra_runtime_t *runtime, ezra_fault_t fault)
+int stnlabz_runtime_report_fault(stnlabz_runtime_t *runtime, stnlabz_fault_t fault)
 {
     if (!runtime) return 0;
     /* Qualifying Core faults enter preservation; module failures do not imply one. */
-    if (fault < EZRA_FAULT_AUTHORITY || fault > EZRA_FAULT_UNAUTHORIZED_CONDITION) return 0;
-    runtime->operational_state = EZRA_OPERATIONAL_SAFE_MODE;
+    if (fault < STNLABZ_FAULT_AUTHORITY || fault > STNLABZ_FAULT_UNAUTHORIZED_CONDITION) return 0;
+    runtime->operational_state = STNLABZ_OPERATIONAL_SAFE_MODE;
     runtime->preservation_cause = fault;
     runtime->preservation_cause_set = 1;
-    runtime->operational_state = EZRA_OPERATIONAL_COMPANY_PRESERVATION;
-    if (ezra_log_is_open()) {
+    runtime->operational_state = STNLABZ_OPERATIONAL_COMPANY_PRESERVATION;
+    if (stnlabz_log_is_open()) {
         char detail[64];
         (void)snprintf(detail, sizeof detail, "fault=%d state=company_preservation", (int)fault);
-        if (!ezra_log_event("RUNTIME", "CORE_FAULT", detail) || !ezra_log_sync()) return 0;
+        if (!stnlabz_log_event("RUNTIME", "CORE_FAULT", detail) || !stnlabz_log_sync()) return 0;
     }
     return 1;
 }
-int ezra_runtime_human_release(ezra_runtime_t *runtime, int authorized_human_release)
+int stnlabz_runtime_human_release(stnlabz_runtime_t *runtime, int authorized_human_release)
 {
     if (!runtime || !authorized_human_release ||
-        runtime->operational_state != EZRA_OPERATIONAL_COMPANY_PRESERVATION)
+        runtime->operational_state != STNLABZ_OPERATIONAL_COMPANY_PRESERVATION)
         return 0;
-    runtime->operational_state = EZRA_OPERATIONAL_NORMAL;
+    runtime->operational_state = STNLABZ_OPERATIONAL_NORMAL;
     runtime->preservation_cause_set = 0;
-    if (ezra_log_is_open() &&
-        (!ezra_log_event("RUNTIME", "HUMAN_RELEASE", "state=normal") || !ezra_log_sync())) return 0;
+    if (stnlabz_log_is_open() &&
+        (!stnlabz_log_event("RUNTIME", "HUMAN_RELEASE", "state=normal") || !stnlabz_log_sync())) return 0;
     return 1;
 }
-ezra_operational_state_t ezra_runtime_operational_state(const ezra_runtime_t *runtime)
+stnlabz_operational_state_t stnlabz_runtime_operational_state(const stnlabz_runtime_t *runtime)
 {
-    return runtime ? runtime->operational_state : EZRA_OPERATIONAL_COMPANY_PRESERVATION;
+    return runtime ? runtime->operational_state : STNLABZ_OPERATIONAL_COMPANY_PRESERVATION;
 }
-int ezra_runtime_normal_operations_allowed(const ezra_runtime_t *runtime)
+int stnlabz_runtime_normal_operations_allowed(const stnlabz_runtime_t *runtime)
 {
-    return runtime && runtime->operational_state == EZRA_OPERATIONAL_NORMAL;
+    return runtime && runtime->operational_state == STNLABZ_OPERATIONAL_NORMAL;
 }
-int ezra_runtime_run(ezra_runtime_t *runtime)
+int stnlabz_runtime_run(stnlabz_runtime_t *runtime)
 {
     struct sigaction action;
     struct sigaction previous_int, previous_term;
     struct timespec delay = { 1, 0 };
     if (!runtime || runtime->running) return 0;
-    action.sa_handler = ezra_runtime_signal_handler;
+    action.sa_handler = stnlabz_runtime_signal_handler;
     sigemptyset(&action.sa_mask);
     action.sa_flags = 0;
     if (sigaction(SIGINT, &action, &previous_int) != 0) return 0;
@@ -77,36 +77,36 @@ int ezra_runtime_run(ezra_runtime_t *runtime)
         (void)sigaction(SIGINT, &previous_int, NULL);
         return 0;
     }
-    ezra_stop_requested = 0;
+    stnlabz_stop_requested = 0;
     runtime->running = 1;
-    if (ezra_log_is_open() &&
-        (!ezra_log_event("RUNTIME", "START", "status=running") || !ezra_log_sync())) {
+    if (stnlabz_log_is_open() &&
+        (!stnlabz_log_event("RUNTIME", "START", "status=running") || !stnlabz_log_sync())) {
         runtime->running = 0;
         (void)sigaction(SIGINT, &previous_int, NULL);
         (void)sigaction(SIGTERM, &previous_term, NULL);
         return 0;
     }
-    while (!ezra_stop_requested) {
+    while (!stnlabz_stop_requested) {
         struct timespec remaining = delay;
         while (nanosleep(&remaining, &remaining) != 0) {
             if (errno == EINTR) {
-                if (ezra_stop_requested) break;
+                if (stnlabz_stop_requested) break;
                 continue;
             }
-            (void)ezra_runtime_report_fault(runtime, EZRA_FAULT_SYSTEM);
+            (void)stnlabz_runtime_report_fault(runtime, STNLABZ_FAULT_SYSTEM);
             runtime->running = 0;
             (void)sigaction(SIGINT, &previous_int, NULL);
             (void)sigaction(SIGTERM, &previous_term, NULL);
             return 0;
         }
-        if (ezra_runtime_normal_operations_allowed(runtime) && runtime->module_poll)
+        if (stnlabz_runtime_normal_operations_allowed(runtime) && runtime->module_poll)
             runtime->module_poll(runtime->module_poll_context);
     }
     runtime->running = 0;
     (void)sigaction(SIGINT, &previous_int, NULL);
     (void)sigaction(SIGTERM, &previous_term, NULL);
-    if (ezra_log_is_open() &&
-        (!ezra_log_event("RUNTIME", "STOP", "reason=stop_requested") || !ezra_log_sync()))
+    if (stnlabz_log_is_open() &&
+        (!stnlabz_log_event("RUNTIME", "STOP", "reason=stop_requested") || !stnlabz_log_sync()))
         return 0;
     return 1;
 }

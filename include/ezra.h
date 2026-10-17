@@ -3,6 +3,6 @@
 
 #define EZRA_NAME "STN-LABZ Ezra"
 
-int ezra_initialize(void);
+int stnlabz_initialize(void);
 
 #endif

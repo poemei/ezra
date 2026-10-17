@@ -7,27 +7,27 @@
 #include <unistd.h>
 #include "logging.h"
 
-static FILE *ezra_log_stream;
+static FILE *stnlabz_log_stream;
 static FILE *module_log_stream;
 static unsigned long module_sequence;
 
 static int open_pair(const char *core_path,const char *module_path)
 {
-    if(ezra_log_stream||module_log_stream||!core_path||!module_path)return 0;
-    ezra_log_stream=fopen(core_path,"a");
-    if(!ezra_log_stream)return 0;
+    if(stnlabz_log_stream||module_log_stream||!core_path||!module_path)return 0;
+    stnlabz_log_stream=fopen(core_path,"a");
+    if(!stnlabz_log_stream)return 0;
     module_log_stream=fopen(module_path,"a");
     if(!module_log_stream){
-        (void)fclose(ezra_log_stream);ezra_log_stream=NULL;
+        (void)fclose(stnlabz_log_stream);stnlabz_log_stream=NULL;
         return 0;
     }
-    (void)setvbuf(ezra_log_stream,NULL,_IOLBF,0);
+    (void)setvbuf(stnlabz_log_stream,NULL,_IOLBF,0);
     (void)setvbuf(module_log_stream,NULL,_IOLBF,0);
     return 1;
 }
-int ezra_log_is_open(void){return ezra_log_stream&&module_log_stream;}
+int stnlabz_log_is_open(void){return stnlabz_log_stream&&module_log_stream;}
 
-int ezra_log_open_path(const char *path)
+int stnlabz_log_open_path(const char *path)
 {
     char module_path[1024];
     const char *slash;
@@ -38,10 +38,10 @@ int ezra_log_open_path(const char *path)
     if(n<0||(size_t)n>=sizeof module_path)return 0;
     return open_pair(path,module_path);
 }
-int ezra_log_open(void)
+int stnlabz_log_open(void)
 {
-    if(mkdir(EZRA_LOG_DIRECTORY,0700)!=0&&errno!=EEXIST)return 0;
-    return open_pair(EZRA_LOG_PATH,EZRA_MODULE_LOG_PATH);
+    if(mkdir(STNLABZ_LOG_DIRECTORY,0700)!=0&&errno!=EEXIST)return 0;
+    return open_pair(STNLABZ_LOG_PATH,STNLABZ_LEGACY_MODULE_LOG_PATH);
 }
 static int is_module_component(const char *component)
 {
@@ -79,15 +79,15 @@ static void module_identity(const char *detail,char *id,size_t id_size,
   if(n>0&&n<version_size){memcpy(version,p,n);version[n]=0;}
  }
 }
-int ezra_log_event(const char *component,const char *event,const char *detail)
+int stnlabz_log_event(const char *component,const char *event,const char *detail)
 {
     time_t now;
     struct tm utc;
     char stamp[32];
     FILE *destination;
     int written;
-    if(!ezra_log_is_open()||!component||!event)return 0;
-    destination=is_module_component(component)?module_log_stream:ezra_log_stream;
+    if(!stnlabz_log_is_open()||!component||!event)return 0;
+    destination=is_module_component(component)?module_log_stream:stnlabz_log_stream;
     now=time(NULL);
     if(now==(time_t)-1||!gmtime_r(&now,&utc)||
        !strftime(stamp,sizeof stamp,"%Y-%m-%dT%H:%M:%SZ",&utc))return 0;
@@ -111,17 +111,17 @@ int ezra_log_event(const char *component,const char *event,const char *detail)
     }
     return written>0&&!ferror(destination);
 }
-int ezra_log_sync(void)
+int stnlabz_log_sync(void)
 {
-    return ezra_log_is_open()&&fflush(ezra_log_stream)==0&&
-        fsync(fileno(ezra_log_stream))==0&&
+    return stnlabz_log_is_open()&&fflush(stnlabz_log_stream)==0&&
+        fsync(fileno(stnlabz_log_stream))==0&&
         fflush(module_log_stream)==0&&fsync(fileno(module_log_stream))==0;
 }
-void ezra_log_close(void)
+void stnlabz_log_close(void)
 {
-    if(ezra_log_stream){
-        (void)fflush(ezra_log_stream);(void)fclose(ezra_log_stream);
-        ezra_log_stream=NULL;
+    if(stnlabz_log_stream){
+        (void)fflush(stnlabz_log_stream);(void)fclose(stnlabz_log_stream);
+        stnlabz_log_stream=NULL;
     }
     if(module_log_stream){
         (void)fflush(module_log_stream);(void)fclose(module_log_stream);
