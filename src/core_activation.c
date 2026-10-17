@@ -17,7 +17,7 @@ static int audit(const char *event, const char *id,
         stnlabz_module_result_string(result),
         record ? stnlabz_module_state_string(record->state) : "NOT_FOUND",
         record ? record->activation_authorized : 0);
-    return digit_log_event("MODULE", event, detail) && digit_log_sync();
+    return ezra_log_event("MODULE", event, detail) && ezra_log_sync();
 }
 
 stnlabz_module_result_t digit_core_authorize(stnlabz_module_registry_t *registry,
@@ -25,7 +25,7 @@ stnlabz_module_result_t digit_core_authorize(stnlabz_module_registry_t *registry
 {
     stnlabz_module_result_t rc;
     digit_policy_result_t decision;
-    if (!registry || !module_id || !digit_log_is_open())
+    if (!registry || !module_id || !ezra_log_is_open())
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     if (!audit("AUTHORIZE_REQUEST", module_id, STNLABZ_MODULE_OK,
                stnlabz_module_registry_find(registry, module_id)))
@@ -57,7 +57,7 @@ stnlabz_module_result_t digit_core_activate(stnlabz_module_registry_t *registry,
     const stnlabz_module_record_t *record;
     stnlabz_module_result_t rc;
     digit_policy_result_t decision;
-    if (!registry || !module_id || !digit_log_is_open())
+    if (!registry || !module_id || !ezra_log_is_open())
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     record = stnlabz_module_registry_find(registry, module_id);
     if (!audit("ACTIVATE_REQUEST", module_id, STNLABZ_MODULE_OK, record))
@@ -73,7 +73,7 @@ stnlabz_module_result_t digit_core_activate(stnlabz_module_registry_t *registry,
              strcmp(request->operation, "module.activate") != 0 ||
              strcmp(request->module_id, module_id) != 0)
         rc = STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
-    else if (!digit_core_policy_evaluate(request, &decision))
+    else if (!ezra_core_policy_evaluate(request, &decision))
         rc = STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
     else if (decision.decision != DIGIT_POLICY_ALLOW)
         rc = STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
@@ -92,7 +92,7 @@ int digit_core_stop(stnlabz_module_registry_t *registry, const char *module_id)
 {
     const stnlabz_module_record_t *record;
     stnlabz_module_result_t rc;
-    if (!registry || !module_id || !digit_log_is_open()) return 0;
+    if (!registry || !module_id || !ezra_log_is_open()) return 0;
     record = stnlabz_module_registry_find(registry, module_id);
     if (!record || record->state != STNLABZ_MODULE_STATE_ACTIVE) return 0;
     if (!audit("STOP_REQUEST", module_id, STNLABZ_MODULE_OK, record))
@@ -108,11 +108,11 @@ int digit_core_stop_all(stnlabz_module_registry_t *registry)
 {
     size_t i;
     int good = 1;
-    if (!registry || !digit_log_is_open()) return 0;
+    if (!registry || !ezra_log_is_open()) return 0;
     for (i = registry->count; i > 0; --i) {
         stnlabz_module_record_t *record = &registry->modules[i - 1];
         if (record->state != STNLABZ_MODULE_STATE_ACTIVE) continue;
-        if (!digit_core_stop(registry, record->descriptor.id)) good = 0;
+        if (!ezra_core_stop(registry, record->descriptor.id)) good = 0;
     }
     return good;
 }
