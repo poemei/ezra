@@ -2,8 +2,8 @@
 # The shared STN-LABZ ABI is maintained outside this repository.
 #
 # Default layout:
-#   ../stnlabz_abi/include/stnlabz_abi/*.h
-#   ../stnlabz_abi/src/*.c
+#   ../ABI/includes/*.h
+#   ../ABI/src/*.c
 # Override ABI_DIR / ABI_INCLUDE_DIR / ABI_SRC_DIR for a different layout.
 
 CC ?= cc
@@ -12,7 +12,7 @@ CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
 LDFLAGS ?=
 LDLIBS ?= -ldl -lcrypto
 
-ABI_DIR ?= ../../ABI
+ABI_DIR ?= ../ABI
 ABI_INCLUDE_DIR ?= $(ABI_DIR)/includes
 ABI_SRC_DIR ?= $(ABI_DIR)/src
 
