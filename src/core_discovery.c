@@ -7,7 +7,7 @@
 
 static int audit(const char *event, const char *detail)
 {
-    return digit_log_event("MODULE", event, detail) && digit_log_sync();
+    return ezra_log_event("MODULE", event, detail) && ezra_log_sync();
 }
 
 int digit_core_discover(stnlabz_module_registry_t *registry,
@@ -16,7 +16,7 @@ int digit_core_discover(stnlabz_module_registry_t *registry,
 {
     stnlabz_module_result_t rc;
     char detail[512];
-    if (!registry || !loader || !path || !report || !digit_log_is_open())
+    if (!registry || !loader || !path || !report || !ezra_log_is_open())
         return 0;
     {
         struct stat st;
