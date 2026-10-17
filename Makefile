@@ -31,11 +31,15 @@ DEPS := $(OBJS:.o=.d)
 .PHONY: all clean
 all: $(TARGET)
 
-ifeq ($(strip $(ABI_SRCS)),)
-$(error No external ABI C sources found in $(ABI_SRC_DIR); set ABI_DIR or ABI_SRC_DIR)
-endif
+.PHONY: check-abi
+check-abi:
+	@test -n "$(strip $(ABI_SRCS))" || { \
+		echo "ERROR: Shared ABI C sources not found in $(ABI_SRC_DIR)" >&2; \
+		echo "Set ABI_DIR or ABI_SRC_DIR to the actual external ABI location." >&2; \
+		exit 1; \
+	}
 
-$(TARGET): $(OBJS)
+$(TARGET): $(OBJS) | check-abi
 	@mkdir -p $(dir $@)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
