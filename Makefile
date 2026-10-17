@@ -4,6 +4,7 @@
 # Default layout:
 #   ../ABI/includes/*.h
 #   ../ABI/src/*.c
+# Follow Digit's Core ABI source selection; exclude standalone ABI inventory/catalog.
 # Override ABI_DIR / ABI_INCLUDE_DIR / ABI_SRC_DIR for a different layout.
 
 CC ?= cc
@@ -22,7 +23,7 @@ BUILD_DIR ?= build
 TARGET ?= bin/ezra
 
 CORE_SRCS := $(sort $(wildcard src/*.c))
-ABI_SRCS := $(sort $(filter-out $(ABI_SRC_DIR)/main.c $(ABI_SRC_DIR)/loader_win.c $(ABI_SRC_DIR)/module_discovery_win.c,$(wildcard $(ABI_SRC_DIR)/*.c)))
+ABI_SRCS := $(addprefix $(ABI_SRC_DIR)/,abi.c module.c module_registry.c loader_linux.c module_discovery_linux.c)
 CORE_OBJS := $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(CORE_SRCS))
 ABI_OBJS := $(patsubst $(ABI_SRC_DIR)/%.c,$(BUILD_DIR)/abi/%.o,$(ABI_SRCS))
 OBJS := $(CORE_OBJS) $(ABI_OBJS)
@@ -33,7 +34,7 @@ all: $(TARGET)
 
 .PHONY: check-abi
 check-abi:
-	@test -n "$(strip $(ABI_SRCS))" || { \
+	@test -f "$(ABI_SRC_DIR)/abi.c" || { \
 		echo "ERROR: Shared ABI C sources not found in $(ABI_SRC_DIR)" >&2; \
 		echo "Set ABI_DIR or ABI_SRC_DIR to the actual external ABI location." >&2; \
 		exit 1; \
