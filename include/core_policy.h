@@ -1,11 +1,11 @@
-#ifndef DIGIT_CORE_POLICY_H
-#define DIGIT_CORE_POLICY_H
+#ifndef EZRA_CORE_POLICY_H
+#define EZRA_CORE_POLICY_H
 #include "agent_root.h"
 typedef enum {
-    DIGIT_POLICY_ALLOW = 0,
-    DIGIT_POLICY_DENY,
-    DIGIT_POLICY_ESCALATE
-} digit_policy_decision_t;
+    EZRA_POLICY_ALLOW = 0,
+    EZRA_POLICY_DENY,
+    EZRA_POLICY_ESCALATE
+} ezra_policy_decision_t;
 typedef struct {
     const char *actor;           /* Already verified by a trusted Core caller. */
     const char *mission;         /* Assigned mission identifier. */
@@ -18,19 +18,19 @@ typedef struct {
     const char *escalation_target; /* Valid next-level contact supplied by operator policy. */
     const char *verification_source; /* Trusted Core caller provenance label. */
     int context_verified; /* Asserted by trusted caller, NOT independent authentication. */
-} digit_policy_request_t;
+} ezra_policy_request_t;
 typedef enum {
-    DIGIT_ESCALATION_NONE = 0,
-    DIGIT_ESCALATION_PENDING_DELIVERY,
-    DIGIT_ESCALATION_UNAVAILABLE
-} digit_escalation_status_t;
+    EZRA_ESCALATION_NONE = 0,
+    EZRA_ESCALATION_PENDING_DELIVERY,
+    EZRA_ESCALATION_UNAVAILABLE
+} ezra_escalation_status_t;
 typedef struct {
-    digit_policy_decision_t decision;
+    ezra_policy_decision_t decision;
     const char *policy_id;
     const char *reason;
-    digit_escalation_status_t escalation_status; /* No external delivery is implied. */
-} digit_policy_result_t;
+    ezra_escalation_status_t escalation_status; /* No external delivery is implied. */
+} ezra_policy_result_t;
 /* Fail-closed evaluation; writes a synchronized policy decision to the Core log. */
-int digit_core_policy_evaluate(const digit_policy_request_t *request,
-    digit_policy_result_t *result);
+int ezra_core_policy_evaluate(const ezra_policy_request_t *request,
+    ezra_policy_result_t *result);
 #endif

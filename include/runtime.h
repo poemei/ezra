@@ -1,37 +1,37 @@
-#ifndef DIGIT_RUNTIME_H
-#define DIGIT_RUNTIME_H
+#ifndef EZRA_RUNTIME_H
+#define EZRA_RUNTIME_H
 
 typedef enum {
-    DIGIT_OPERATIONAL_NORMAL = 0,
-    DIGIT_OPERATIONAL_SAFE_MODE = 1,
-    DIGIT_OPERATIONAL_COMPANY_PRESERVATION = 2
-} digit_operational_state_t;
+    EZRA_OPERATIONAL_NORMAL = 0,
+    EZRA_OPERATIONAL_SAFE_MODE = 1,
+    EZRA_OPERATIONAL_COMPANY_PRESERVATION = 2
+} ezra_operational_state_t;
 
 typedef enum {
-    DIGIT_FAULT_AUTHORITY = 0,
-    DIGIT_FAULT_INTEGRITY = 1,
-    DIGIT_FAULT_SYSTEM = 2,
-    DIGIT_FAULT_MISSION = 3,
-    DIGIT_FAULT_TRUTHFULNESS = 4,
-    DIGIT_FAULT_UNAUTHORIZED_CONDITION = 5
-} digit_fault_t;
+    EZRA_FAULT_AUTHORITY = 0,
+    EZRA_FAULT_INTEGRITY = 1,
+    EZRA_FAULT_SYSTEM = 2,
+    EZRA_FAULT_MISSION = 3,
+    EZRA_FAULT_TRUTHFULNESS = 4,
+    EZRA_FAULT_UNAUTHORIZED_CONDITION = 5
+} ezra_fault_t;
 
 typedef struct {
     int running;
-    digit_operational_state_t operational_state;
-    digit_fault_t preservation_cause;
+    ezra_operational_state_t operational_state;
+    ezra_fault_t preservation_cause;
     int preservation_cause_set;
     void (*module_poll)(void *context);
     void *module_poll_context;
-} digit_runtime_t;
+} ezra_runtime_t;
 
 /* Core runtime functions do not require any installed modules. */
-void digit_runtime_init(digit_runtime_t *runtime);
-int digit_runtime_run(digit_runtime_t *runtime);
-void digit_runtime_request_stop(void);
-int digit_runtime_report_fault(digit_runtime_t *runtime, digit_fault_t fault);
-int digit_runtime_human_release(digit_runtime_t *runtime, int authorized_human_release);
-digit_operational_state_t digit_runtime_operational_state(const digit_runtime_t *runtime);
-int digit_runtime_normal_operations_allowed(const digit_runtime_t *runtime);
+void ezra_runtime_init(ezra_runtime_t *runtime);
+int ezra_runtime_run(ezra_runtime_t *runtime);
+void ezra_runtime_request_stop(void);
+int ezra_runtime_report_fault(ezra_runtime_t *runtime, ezra_fault_t fault);
+int ezra_runtime_human_release(ezra_runtime_t *runtime, int authorized_human_release);
+ezra_operational_state_t ezra_runtime_operational_state(const ezra_runtime_t *runtime);
+int ezra_runtime_normal_operations_allowed(const ezra_runtime_t *runtime);
 
 #endif

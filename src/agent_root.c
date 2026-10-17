@@ -25,7 +25,7 @@ static int identifier(const char *s)
     size_t i;
     if (!bounded(s)) return 0;
     for (i=0;s[i];++i)
-        if (!(islower((unsigned char)s[i]) || isdigit((unsigned char)s[i]) ||
+        if (!(islower((unsigned char)s[i]) || isezra((unsigned char)s[i]) ||
               s[i]=='-' || s[i]=='_')) return 0;
     return 1;
 }

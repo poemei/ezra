@@ -3,13 +3,13 @@
 #include "core_inventory.h"
 #include "logging.h"
 
-size_t digit_core_inventory_count(const stnlabz_module_registry_t *registry)
+size_t ezra_core_inventory_count(const stnlabz_module_registry_t *registry)
 {
     return registry ? registry->count : 0;
 }
 
-int digit_core_inventory_get(const stnlabz_module_registry_t *registry,
-    size_t index, digit_core_inventory_entry_t *out)
+int ezra_core_inventory_get(const stnlabz_module_registry_t *registry,
+    size_t index, ezra_core_inventory_entry_t *out)
 {
     const stnlabz_module_record_t *record;
     if (!registry || !out || index >= registry->count || !registry->modules)
@@ -31,29 +31,29 @@ int digit_core_inventory_get(const stnlabz_module_registry_t *registry,
     return 1;
 }
 
-int digit_core_inventory_find(const stnlabz_module_registry_t *registry,
-    const char *module_id, digit_core_inventory_entry_t *out)
+int ezra_core_inventory_find(const stnlabz_module_registry_t *registry,
+    const char *module_id, ezra_core_inventory_entry_t *out)
 {
     size_t i;
     if (!registry || !module_id || !out) return 0;
     for (i = 0; i < registry->count; ++i) {
         if (strcmp(registry->modules[i].descriptor.id, module_id) == 0)
-            return digit_core_inventory_get(registry, i, out);
+            return ezra_core_inventory_get(registry, i, out);
     }
     return 0;
 }
 
-int digit_core_inventory_log(const stnlabz_module_registry_t *registry)
+int ezra_core_inventory_log(const stnlabz_module_registry_t *registry)
 {
-    digit_core_inventory_entry_t entry;
+    ezra_core_inventory_entry_t entry;
     char detail[512];
     size_t i;
-    if (!registry || !digit_log_is_open()) return 0;
+    if (!registry || !ezra_log_is_open()) return 0;
     (void)snprintf(detail, sizeof detail, "count=%zu", registry->count);
-    if (!digit_log_event("INVENTORY", "SNAPSHOT", detail) || !digit_log_sync())
+    if (!ezra_log_event("INVENTORY", "SNAPSHOT", detail) || !ezra_log_sync())
         return 0;
     for (i = 0; i < registry->count; ++i) {
-        if (!digit_core_inventory_get(registry, i, &entry)) return 0;
+        if (!ezra_core_inventory_get(registry, i, &entry)) return 0;
         (void)snprintf(detail, sizeof detail,
             "id=%.63s name=%.127s version=%u.%u.%u required_api=%u.%u state=%s tests=%u passed=%u failed=%u negative_executed=%d negative_passed=%d authorized=%d active=%d failure_reason=%s",
             entry.id, entry.name,
@@ -65,7 +65,7 @@ int digit_core_inventory_log(const stnlabz_module_registry_t *registry)
             entry.qualification.negative_test_executed,
             entry.qualification.negative_test_passed,
             entry.activation_authorized, entry.active, entry.failure_reason);
-        if (!digit_log_event("INVENTORY", "ENTRY", detail) || !digit_log_sync())
+        if (!ezra_log_event("INVENTORY", "ENTRY", detail) || !ezra_log_sync())
             return 0;
     }
     return 1;

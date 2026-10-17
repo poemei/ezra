@@ -11,7 +11,6 @@
 #include "core_hotload.h"
 #include "core_activation.h"
 #include "logging.h"
-#include "intel_delivery.h"
 
 /* Core owns module replacement; no module may grant its own activation. */
 typedef struct {
@@ -20,12 +19,12 @@ typedef struct {
  char rejected_sha[SHA256_DIGEST_LENGTH*2+1];
  unsigned major,minor,patch;
 } observed_t;
-struct digit_hotload {
+struct ezra_hotload {
  char directory[1024];
  stnlabz_module_registry_t *registry;
  stnlabz_module_loader_t *loader;
  const stnlabz_module_host_t *host;
- digit_policy_request_t policy;
+ ezra_policy_request_t policy;
  observed_t *seen;
  size_t count,capacity;
 };
@@ -40,11 +39,11 @@ static int digest(const char *path,char out[65]){
  for(i=0;i<sizeof hash;i++)sprintf(out+2*i,"%02x",hash[i]);
  out[64]=0;return 1;
 }
-static observed_t *find(digit_hotload_t *w,const char *id){
+static observed_t *find(ezra_hotload_t *w,const char *id){
  size_t i;for(i=0;i<w->count;i++)if(!strcmp(w->seen[i].id,id))return &w->seen[i];
  return NULL;
 }
-static int remember(digit_hotload_t *w,const char *id,const char *hash,
+static int remember(ezra_hotload_t *w,const char *id,const char *hash,
  const stnlabz_module_descriptor_t *d){
  observed_t *s=find(w,id);
  if(!s){
@@ -61,52 +60,18 @@ static int remember(digit_hotload_t *w,const char *id,const char *hash,
  s->major=d->version_major;s->minor=d->version_minor;s->patch=d->version_patch;
  return 1;
 }
-static int log_report(digit_hotload_t *w,const char *event,const char *id,
+static int log_report(ezra_hotload_t *w,const char *event,const char *id,
  const observed_t *old,const stnlabz_module_descriptor_t *candidate,
  const char *before,const char *after,const char *reason,const char *recovery){
- char detail[760],notice[470],active_version[32];
- digit_intel_delivery_t msg={0};int queued=0;
- size_t used=0;const char *routes[]={DIGIT_INTEL_IRC_SERVICE,DIGIT_INTEL_SLACK_SERVICE};
- size_t i;int ok,replacement_ok=!strcmp(event,"HOTLOAD_ACTIVE");
- int active_known=replacement_ok||
-  (recovery&&(!strcmp(recovery,"incumbent_retained")||
-               !strcmp(recovery,"incumbent_restored")));
- if(replacement_ok&&candidate)
-  snprintf(active_version,sizeof active_version,"%u.%u.%u",
-   candidate->version_major,candidate->version_minor,candidate->version_patch);
- else if(active_known&&old)
-  snprintf(active_version,sizeof active_version,"%u.%u.%u",
-   old->major,old->minor,old->patch);
- else snprintf(active_version,sizeof active_version,"unknown");
+ char detail[760];
+ (void)w;
  snprintf(detail,sizeof detail,
-  "reported_event=%s module=%s active_version=%s incumbent_version=%u.%u.%u candidate_version=%u.%u.%u incumbent_sha256=%s candidate_sha256=%s reason=%s recovery=%s",
-  event,id,active_version,old?old->major:0,old?old->minor:0,old?old->patch:0,
+  "reported_event=%s module=%s incumbent_version=%u.%u.%u candidate_version=%u.%u.%u incumbent_sha256=%s candidate_sha256=%s reason=%s recovery=%s",
+  event,id,old?old->major:0,old?old->minor:0,old?old->patch:0,
   candidate?candidate->version_major:0,candidate?candidate->version_minor:0,
   candidate?candidate->version_patch:0,before?before:"unknown",after?after:"unknown",
   reason,recovery);
- /* The activation layer already logs HOTLOAD_ACTIVE. This is a distinct
-    delivery audit, preventing the incumbent from appearing as a second active version. */
- ok=digit_log_event("MODULE","HOTLOAD_NOTICE",detail)&&digit_log_sync();
- snprintf(notice,sizeof notice,
-  "[MODULE] %s id=%s active=%s incumbent=%u.%u.%u candidate=%u.%u.%u reason=%s recovery=%s",
-  event,id,active_version,old?old->major:0,old?old->minor:0,old?old->patch:0,
-  candidate?candidate->version_major:0,candidate?candidate->version_minor:0,
-  candidate?candidate->version_patch:0,reason,recovery);
- msg.version=DIGIT_INTEL_DELIVERY_VERSION;
- snprintf(msg.message,sizeof msg.message,"%s",notice);
- for(i=0;i<2;i++){
-  stnlabz_module_result_t rc=w->host->invoke_service?
-   w->host->invoke_service(routes[i],&msg,sizeof msg,&queued,sizeof queued,&used):
-   STNLABZ_MODULE_ERR_NOT_FOUND;
-  if(rc!=STNLABZ_MODULE_OK||used!=sizeof queued||queued!=1){
-   char failure[256];
-   snprintf(failure,sizeof failure,"module=%s route=%s result=%d reason=delivery_not_confirmed",
-    id,routes[i],(int)rc);
-   (void)digit_log_event("MODULE","NOTIFICATION_FAILED",failure);
-   ok=0;
-  }
- }
- (void)digit_log_sync();return ok;
+ return ezra_log_event("MODULE","HOTLOAD_NOTICE",detail)&&ezra_log_sync();
 }
 static int newer(const observed_t *o,const stnlabz_module_descriptor_t *d){
  if(d->version_major!=o->major)return d->version_major>o->major;
@@ -135,7 +100,7 @@ static int snapshot_candidate(const char *path,char *staged,size_t cap,
  for(i=0;i<sizeof hash;i++)sprintf(sha+i*2,"%02x",hash[i]);
  sha[64]=0;return 1;
 }
-static void replacement(digit_hotload_t *w,const char *id,const char *path,
+static void replacement(ezra_hotload_t *w,const char *id,const char *path,
  observed_t *original){
  char staged[1120],sha[65];stnlabz_module_loader_t candidate;
  const stnlabz_module_descriptor_t *desc=NULL;
@@ -148,8 +113,8 @@ static void replacement(digit_hotload_t *w,const char *id,const char *path,
  if(!snapshot_candidate(path,staged,sizeof staged,sha)){
   char detail[400];
   snprintf(detail,sizeof detail,"module=%s path=%.230s reason=candidate_snapshot_failed",id,path);
-  (void)digit_log_event("MODULE","HOTLOAD_FAILED",detail);
-  (void)digit_log_sync();
+  (void)ezra_log_event("MODULE","HOTLOAD_FAILED",detail);
+  (void)ezra_log_sync();
   return;
  }
  if(!strcmp(original->sha,sha)){unlink(staged);return;}
@@ -193,12 +158,12 @@ static void replacement(digit_hotload_t *w,const char *id,const char *path,
  previous=w->loader->modules[pos];
  w->policy.module_id=id;
  /* Recheck the trusted authorization boundary before changing live state. */
- digit_policy_result_t decision;
- if(!digit_core_policy_evaluate(&w->policy,&decision)||decision.decision!=DIGIT_POLICY_ALLOW){
+ ezra_policy_result_t decision;
+ if(!ezra_core_policy_evaluate(&w->policy,&decision)||decision.decision!=EZRA_POLICY_ALLOW){
   (void)log_report(w,"HOTLOAD_DENIED",id,original,desc,original->sha,sha,
    "authorization_denied","incumbent_retained");goto end;
  }
- if(!digit_core_stop(w->registry,id)){
+ if(!ezra_core_stop(w->registry,id)){
   (void)log_report(w,"HOTLOAD_FAILED",id,original,desc,original->sha,sha,
    "incumbent_stop_failed","incumbent_status_unverified");goto end;
  }
@@ -210,8 +175,8 @@ static void replacement(digit_hotload_t *w,const char *id,const char *path,
    trial.state=STNLABZ_MODULE_STATE_QUALIFIED;trial.activation_authorized=0;
    w->registry->modules[j]=trial;break;
   }
- if(digit_core_authorize(w->registry,id,&w->policy)==STNLABZ_MODULE_OK &&
-    digit_core_activate(w->registry,id,w->host,&w->policy)==STNLABZ_MODULE_OK){
+ if(ezra_core_authorize(w->registry,id,&w->policy)==STNLABZ_MODULE_OK &&
+    ezra_core_activate(w->registry,id,w->host,&w->policy)==STNLABZ_MODULE_OK){
   /* Retain incumbent handle until process shutdown: callbacks may be in flight. */
   w->loader->modules[pos]=candidate.modules[0];
   candidate.count=0;
@@ -226,8 +191,8 @@ static void replacement(digit_hotload_t *w,const char *id,const char *path,
     w->registry->modules[j].state=STNLABZ_MODULE_STATE_STOPPED;
     w->registry->modules[j].activation_authorized=0;break;
    }
-  rc=digit_core_authorize(w->registry,id,&w->policy);
-  if(rc==STNLABZ_MODULE_OK)rc=digit_core_activate(w->registry,id,w->host,&w->policy);
+  rc=ezra_core_authorize(w->registry,id,&w->policy);
+  if(rc==STNLABZ_MODULE_OK)rc=ezra_core_activate(w->registry,id,w->host,&w->policy);
   (void)log_report(w,"HOTLOAD_FAILED",id,original,desc,original->sha,sha,
     "candidate_activation_failed",rc==STNLABZ_MODULE_OK?
     "incumbent_restored":"incumbent_restore_failed");
@@ -237,22 +202,22 @@ end:
  stnlabz_module_loader_unload_all(&candidate);
  unlink(staged);
 }
-digit_hotload_t *digit_hotload_create(const char *directory,
+ezra_hotload_t *ezra_hotload_create(const char *directory,
  stnlabz_module_registry_t *registry,stnlabz_module_loader_t *loader,
- const stnlabz_module_host_t *host,const digit_policy_request_t *policy){
- digit_hotload_t *w;size_t i;
+ const stnlabz_module_host_t *host,const ezra_policy_request_t *policy){
+ ezra_hotload_t *w;size_t i;
  if(!directory||!registry||!loader||!host||!policy)return NULL;
  w=calloc(1,sizeof *w);if(!w)return NULL;
  if(strlen(directory)>=sizeof w->directory){free(w);return NULL;}
  snprintf(w->directory,sizeof w->directory,"%s",directory);
  w->registry=registry;w->loader=loader;w->host=host;w->policy=*policy;
  /* Rictus pattern: Core polls active registry entries, not a fixed watch list.
-    Remember installed binary hashes solely to enforce Digit's SHA/version rule. */
+    Remember installed binary hashes solely to enforce Ezra's SHA/version rule. */
  {
   char detail[400];
   snprintf(detail,sizeof detail,"directory=%.310s status=ready registry_count=%zu",directory,registry->count);
-  (void)digit_log_event("MODULE","HOTLOAD_WATCH_READY",detail);
-  (void)digit_log_sync();
+  (void)ezra_log_event("MODULE","HOTLOAD_WATCH_READY",detail);
+  (void)ezra_log_sync();
  }
  for(i=0;i<registry->count;i++){
   const stnlabz_module_record_t *r=&registry->modules[i];
@@ -264,22 +229,22 @@ digit_hotload_t *digit_hotload_create(const char *directory,
   if(!digest(path,sha)){
    snprintf(detail,sizeof detail,"module=%s reason=baseline_hash_unavailable path=%.250s",
      r->descriptor.id,path);
-   (void)digit_log_event("MODULE","HOTLOAD_FAILED",detail);
+   (void)ezra_log_event("MODULE","HOTLOAD_FAILED",detail);
   }else if(!remember(w,r->descriptor.id,sha,&r->descriptor)){
    free(w->seen);free(w);return NULL;
   }else{
    snprintf(detail,sizeof detail,"module=%s version=%u.%u.%u sha256=%s",
     r->descriptor.id,r->descriptor.version_major,r->descriptor.version_minor,
     r->descriptor.version_patch,sha);
-   (void)digit_log_event("MODULE","HOTLOAD_WATCH",detail);
+   (void)ezra_log_event("MODULE","HOTLOAD_WATCH",detail);
   }
  }
- (void)digit_log_sync();
+ (void)ezra_log_sync();
  return w;
 }
-/* Admit a newly installed module without stopping Digit. Module manifest must
+/* Admit a newly installed module without stopping Ezra. Module manifest must
    identify its own directory; no module gains authority from installation alone. */
-static void discover_new(digit_hotload_t *w){
+static void discover_new(ezra_hotload_t *w){
  DIR *dir=opendir(w->directory);
  struct dirent *entry;
  if(!dir)return;
@@ -315,36 +280,36 @@ static void discover_new(digit_hotload_t *w){
   if(stat(binary,&st)||!S_ISREG(st.st_mode))continue;
   if(!snapshot_candidate(binary,staged,sizeof staged,sha)){
    snprintf(detail,sizeof detail,"module=%s reason=new_module_snapshot_failed",id);
-   (void)digit_log_event("MODULE","HOTLOAD_FAILED",detail);continue;
+   (void)ezra_log_event("MODULE","HOTLOAD_FAILED",detail);continue;
   }
   snprintf(detail,sizeof detail,"module=%s candidate_sha256=%s status=new_module",id,sha);
-  (void)digit_log_event("MODULE","HOTLOAD_DETECTED",detail);
+  (void)ezra_log_event("MODULE","HOTLOAD_DETECTED",detail);
   stnlabz_module_loader_init(&candidate);
   if(stnlabz_module_loader_load(&candidate,id,staged,&desc)!=STNLABZ_MODULE_LOADER_OK){
    snprintf(detail,sizeof detail,"module=%s candidate_sha256=%s reason=candidate_load_failed",id,sha);
-   (void)digit_log_event("MODULE","HOTLOAD_DENIED",detail);goto cleanup;
+   (void)ezra_log_event("MODULE","HOTLOAD_DENIED",detail);goto cleanup;
   }
   rc=stnlabz_module_registry_discover(w->registry,desc);
   if(rc==STNLABZ_MODULE_OK)rc=stnlabz_module_registry_verify(w->registry,id);
   if(rc==STNLABZ_MODULE_OK)rc=stnlabz_module_registry_qualify(w->registry,id);
   if(rc!=STNLABZ_MODULE_OK){
    snprintf(detail,sizeof detail,"module=%s candidate_sha256=%s reason=qualification_failed result=%d",id,sha,(int)rc);
-   (void)digit_log_event("MODULE","HOTLOAD_DENIED",detail);goto rollback;
+   (void)ezra_log_event("MODULE","HOTLOAD_DENIED",detail);goto rollback;
   }
   w->policy.module_id=id;
-  rc=digit_core_authorize(w->registry,id,&w->policy);
-  if(rc==STNLABZ_MODULE_OK)rc=digit_core_activate(w->registry,id,w->host,&w->policy);
+  rc=ezra_core_authorize(w->registry,id,&w->policy);
+  if(rc==STNLABZ_MODULE_OK)rc=ezra_core_activate(w->registry,id,w->host,&w->policy);
   if(rc!=STNLABZ_MODULE_OK){
    snprintf(detail,sizeof detail,"module=%s candidate_sha256=%s reason=activation_failed result=%d",id,sha,(int)rc);
-   (void)digit_log_event("MODULE","HOTLOAD_FAILED",detail);goto rollback;
+   (void)ezra_log_event("MODULE","HOTLOAD_FAILED",detail);goto rollback;
   }
   /* Give ownership of the live handle to the existing loader. */
   if(w->loader->count==w->loader->capacity){
    size_t capacity=w->loader->capacity?w->loader->capacity*2:16;
    stnlabz_loaded_module_t *next=realloc(w->loader->modules,capacity*sizeof *next);
    if(!next){
-    (void)digit_core_stop(w->registry,id);
-    (void)digit_log_event("MODULE","HOTLOAD_FAILED","reason=loader_capacity_failed");
+    (void)ezra_core_stop(w->registry,id);
+    (void)ezra_log_event("MODULE","HOTLOAD_FAILED","reason=loader_capacity_failed");
     goto rollback;
    }
    w->loader->modules=next;w->loader->capacity=capacity;
@@ -365,11 +330,11 @@ rollback:
 cleanup:
   stnlabz_module_loader_unload_all(&candidate);
   unlink(staged);
-  (void)digit_log_sync();
+  (void)ezra_log_sync();
  }
  closedir(dir);
 }
-void digit_hotload_poll(digit_hotload_t *w){
+void ezra_hotload_poll(ezra_hotload_t *w){
  size_t i;if(!w)return;
  discover_new(w);
  /* Rictus-style direct registry walk: newly active entries are visible immediately.
@@ -390,8 +355,8 @@ void digit_hotload_poll(digit_hotload_t *w){
    if(known&&strcmp(known->rejected_sha,"unreadable")){
     snprintf(detail,sizeof detail,"module=%s path=%.240s reason=candidate_hash_unavailable",
       r->descriptor.id,path);
-    (void)digit_log_event("MODULE","HOTLOAD_FAILED",detail);
-    (void)digit_log_sync();
+    (void)ezra_log_event("MODULE","HOTLOAD_FAILED",detail);
+    (void)ezra_log_sync();
     snprintf(known->rejected_sha,sizeof known->rejected_sha,"unreadable");
    }
    continue;
@@ -402,8 +367,8 @@ void digit_hotload_poll(digit_hotload_t *w){
    snprintf(detail,sizeof detail,"module=%s version=%u.%u.%u sha256=%s status=baseline",
      r->descriptor.id,r->descriptor.version_major,r->descriptor.version_minor,
      r->descriptor.version_patch,hash);
-   (void)digit_log_event("MODULE","HOTLOAD_WATCH",detail);
-   (void)digit_log_sync();
+   (void)ezra_log_event("MODULE","HOTLOAD_WATCH",detail);
+   (void)ezra_log_sync();
    continue;
   }
   if(!strcmp(hash,known->sha))continue;
@@ -411,14 +376,14 @@ void digit_hotload_poll(digit_hotload_t *w){
   baseline=*known;
   snprintf(detail,sizeof detail,"module=%s version=%u.%u.%u incumbent_sha256=%s candidate_sha256=%s",
     baseline.id,baseline.major,baseline.minor,baseline.patch,baseline.sha,hash);
-  (void)digit_log_event("MODULE","HOTLOAD_DETECTED",detail);
-  (void)digit_log_sync();
+  (void)ezra_log_event("MODULE","HOTLOAD_DETECTED",detail);
+  (void)ezra_log_sync();
   replacement(w,baseline.id,path,&baseline);
   known=find(w,baseline.id);
   if(known&&strcmp(known->sha,hash))
    snprintf(known->rejected_sha,sizeof known->rejected_sha,"%s",hash);
  }
 }
-void digit_hotload_destroy(digit_hotload_t *w){
+void ezra_hotload_destroy(ezra_hotload_t *w){
  if(!w)return;free(w->seen);free(w);
 }
