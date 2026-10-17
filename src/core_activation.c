@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "core_activation.h"
+#include "abi.h" /* Shared STN-LABZ ABI lifecycle declarations. */
 #include "logging.h"
 
 static int audit(const char *event, const char *id,
