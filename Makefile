@@ -12,17 +12,17 @@ CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
 LDFLAGS ?=
 LDLIBS ?= -ldl -lcrypto
 
-ABI_DIR ?= ../stnlabz_abi
-ABI_INCLUDE_DIR ?= $(ABI_DIR)/include
+ABI_DIR ?= ../../ABI
+ABI_INCLUDE_DIR ?= $(ABI_DIR)/includes
 ABI_SRC_DIR ?= $(ABI_DIR)/src
 
-CPPFLAGS += -Iinclude -I$(ABI_INCLUDE_DIR) -I$(ABI_INCLUDE_DIR)/stnlabz_abi
+CPPFLAGS += -Iinclude -I$(ABI_INCLUDE_DIR) -Iinclude/stnlabz_abi
 
 BUILD_DIR ?= build
 TARGET ?= bin/ezra
 
 CORE_SRCS := $(sort $(wildcard src/*.c))
-ABI_SRCS := $(sort $(wildcard $(ABI_SRC_DIR)/*.c) $(wildcard $(ABI_SRC_DIR)/stnlabz_abi/*.c))
+ABI_SRCS := $(sort $(filter-out $(ABI_SRC_DIR)/main.c $(ABI_SRC_DIR)/loader_win.c $(ABI_SRC_DIR)/module_discovery_win.c,$(wildcard $(ABI_SRC_DIR)/*.c)))
 CORE_OBJS := $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(CORE_SRCS))
 ABI_OBJS := $(patsubst $(ABI_SRC_DIR)/%.c,$(BUILD_DIR)/abi/%.o,$(ABI_SRCS))
 OBJS := $(CORE_OBJS) $(ABI_OBJS)
