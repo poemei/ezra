@@ -2,6 +2,7 @@
 #include <string.h>
 #include "module_host.h"
 #define EZRA_HOST_SERVICE_MAX 32U
+#define EZRA_HOST_COMMAND_MAX 32U
 typedef struct {
  char name[STNLABZ_MODULE_SERVICE_NAME_MAX];
  stnlabz_module_service_handler_fn handler;
@@ -9,6 +10,13 @@ typedef struct {
  unsigned int in_flight;
  int withdrawing;
 } service_t;
+typedef struct {
+ char name[STNLABZ_MODULE_COMMAND_NAME_MAX];
+ stnlabz_module_command_handler_fn handler;
+ void *context;
+} command_t;
+static command_t commands[EZRA_HOST_COMMAND_MAX];
+static atomic_flag command_lock = ATOMIC_FLAG_INIT;
 static service_t services[EZRA_HOST_SERVICE_MAX];
 static atomic_flag service_lock = ATOMIC_FLAG_INIT;
 static void lock(void) { while (atomic_flag_test_and_set_explicit(&service_lock, memory_order_acquire)) {} }
@@ -56,7 +64,33 @@ static stnlabz_module_result_t invoke_service(const char *name,const void *reque
  result=handler(request,request_size,response,response_size,response_used,ctx);
  lock();entry->in_flight--;unlock();return result;
 }
+static int register_command(const char *name, stnlabz_module_command_handler_fn handler,void *ctx) {
+ size_t i,slot=EZRA_HOST_COMMAND_MAX,n=len(name,STNLABZ_MODULE_COMMAND_NAME_MAX);
+ if(!handler || !n || n>=STNLABZ_MODULE_COMMAND_NAME_MAX) return 0;
+ while(atomic_flag_test_and_set_explicit(&command_lock,memory_order_acquire)){}
+ for(i=0;i<EZRA_HOST_COMMAND_MAX;i++) {
+  if(commands[i].handler && !strcmp(commands[i].name,name)) break;
+  if(!commands[i].handler && slot==EZRA_HOST_COMMAND_MAX) slot=i;
+ }
+ if(i==EZRA_HOST_COMMAND_MAX && slot!=EZRA_HOST_COMMAND_MAX) {
+  memcpy(commands[slot].name,name,n+1);commands[slot].handler=handler;commands[slot].context=ctx;
+ }
+ atomic_flag_clear_explicit(&command_lock,memory_order_release);
+ return i==EZRA_HOST_COMMAND_MAX && slot!=EZRA_HOST_COMMAND_MAX;
+}
+static int unregister_command(const char *name,void *ctx) {
+ size_t i;int result=0;
+ if(!name) return 0;
+ while(atomic_flag_test_and_set_explicit(&command_lock,memory_order_acquire)){}
+ for(i=0;i<EZRA_HOST_COMMAND_MAX;i++)
+  if(commands[i].handler && commands[i].context==ctx && !strcmp(commands[i].name,name)) {
+    memset(&commands[i],0,sizeof commands[i]);result=1;break;
+  }
+ atomic_flag_clear_explicit(&command_lock,memory_order_release);
+ return result;
+}
 static const stnlabz_module_host_t host={
+ .register_command=register_command,.unregister_command=unregister_command,
  .register_service=register_service,.unregister_service=unregister_service,.invoke_service=invoke_service
 };
 const stnlabz_module_host_t *ezra_module_host(void){return &host;}
