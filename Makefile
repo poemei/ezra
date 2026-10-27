@@ -22,6 +22,17 @@ CPPFLAGS += -Iinclude -I$(ABI_INCLUDE_DIR) -Iinclude/stnlabz_abi
 BUILD_DIR ?= build
 TARGET ?= bin/ezra
 
+PREFIX ?= /opt/ezra
+BINDIR ?= $(PREFIX)/bin
+LOGDIR ?= $(PREFIX)/logs
+MODULEDIR ?= $(PREFIX)/modules
+AUTHDIR ?= $(PREFIX)/auth/irc
+CONFIGDIR ?= $(PREFIX)/config
+STATEDIR ?= $(PREFIX)/state
+INSTALL_USER ?= $(shell stat -c %U .)
+INSTALL_GROUP ?= $(shell stat -c %G .)
+
+
 CORE_SRCS := $(sort $(wildcard src/*.c))
 ABI_SRCS := $(addprefix $(ABI_SRC_DIR)/,abi.c module.c module_registry.c loader_linux.c module_discovery_linux.c)
 CORE_OBJS := $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(CORE_SRCS))
@@ -29,7 +40,7 @@ ABI_OBJS := $(patsubst $(ABI_SRC_DIR)/%.c,$(BUILD_DIR)/abi/%.o,$(ABI_SRCS))
 OBJS := $(CORE_OBJS) $(ABI_OBJS)
 DEPS := $(OBJS:.o=.d)
 
-.PHONY: all clean
+.PHONY: all clean install install-modules
 all: $(TARGET)
 
 .PHONY: check-abi
@@ -51,6 +62,22 @@ $(BUILD_DIR)/%.o: src/%.c
 $(BUILD_DIR)/abi/%.o: $(ABI_SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+
+# Install Core and both mission-independent connectivity modules.
+# Run the installed executable from PREFIX: its development log and module
+# paths are relative to the current working directory.
+install: $(TARGET)
+	@id -u "$(INSTALL_USER)" >/dev/null 2>&1 || { echo "ERROR: unknown install user $(INSTALL_USER)" >&2; exit 1; }
+	@getent group "$(INSTALL_GROUP)" >/dev/null 2>&1 || { echo "ERROR: unknown install group $(INSTALL_GROUP)" >&2; exit 1; }
+	install -d -m 0755 "$(PREFIX)" "$(BINDIR)" "$(MODULEDIR)" "$(CONFIGDIR)" "$(STATEDIR)"
+	install -d -o "$(INSTALL_USER)" -g "$(INSTALL_GROUP)" -m 0750 "$(LOGDIR)" "$(AUTHDIR)"
+	install -m 0755 "$(TARGET)" "$(BINDIR)/ezra"
+	$(MAKE) install-modules
+	@echo "Installed Ezra in $(PREFIX). Run with: cd $(PREFIX) && ./bin/ezra"
+
+install-modules:
+	$(MAKE) -C modules/irc install PREFIX="$(PREFIX)" MODULE_USER="$(INSTALL_USER)" MODULE_GROUP="$(INSTALL_GROUP)"
+	$(MAKE) -C modules/ollama install PREFIX="$(PREFIX)" MODULE_USER="$(INSTALL_USER)" MODULE_GROUP="$(INSTALL_GROUP)"
 
 clean:
 	rm -rf $(BUILD_DIR) $(TARGET)
