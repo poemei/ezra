@@ -1,0 +1,102 @@
+# Ezra IRC Transport Module
+
+`irc` is Ezra's IRC transport/session module.
+
+## Responsibility
+
+The module owns IRC network/session behavior only:
+
+- TLS client connection with certificate and hostname verification
+- IRCv3 capability negotiation
+- SASL PLAIN authentication over verified TLS
+- nick/user registration
+- one or two comma-separated channels, each joined and tracked; targeted rejoin after KICK
+- PING/PONG handling
+- bounded reconnect backoff after transport/session loss
+- strict loading of `/opt/ezra/auth/irc/irc.env`
+
+It does not implement conversational interpretation, reasoning, or mission logic.
+
+## Required credential file
+
+The module requires these exact keys in `/opt/ezra/auth/irc/irc.env`:
+
+```text
+EZRA_IRC_SERVER=...
+EZRA_IRC_PORT=...
+EZRA_IRC_NICK=...
+EZRA_IRC_CHANNEL=#stn-labz,#second-channel
+EZRA_IRC_ACCOUNT=...
+EZRA_IRC_PASSWORD=...
+```
+
+Unknown keys, duplicate keys, missing keys, invalid ports, invalid nick/account values, and invalid channel values cause module start to fail. `EZRA_IRC_CHANNEL` accepts one or two distinct channel names separated by a single comma, without spaces. Credentials are not written to module output.
+
+## Build and test
+
+```sh
+make
+make test
+```
+
+The module qualification callback runs the same protocol self-test set used by `make test`. Qualification does not perform live network access.
+
+## Install
+
+```sh
+sudo make install
+sha256sum build/irc.so /opt/ezra/modules/irc/irc.so
+stat -c '%U:%G %a %n' /opt/ezra/modules/irc/irc.so
+```
+
+The installed hotload artifact is:
+
+```text
+/opt/ezra/modules/irc/irc.so
+```
+
+Ezra watches `/opt/ezra/modules/`. A new or changed `/opt/ezra/modules/<module>/<module>.so` is snapshotted, loaded, verified, and qualified. A passing candidate is activated. A failing candidate remains inert while Ezra continues running; the same failed bytes are not retried until the file changes.
+
+
+## Installation integrity and ownership (2026-10-27)
+
+Installation enforces the existing `digit:digit` module-artifact ownership expectation. The Makefile uses a private staging filename in the module directory, verifies that the staged file matches the build, atomically renames it to `irc.so`, and verifies the installed bytes and ownership. Installation fails explicitly if either check fails; installed module binary mode is 0755 and configuration mode is 0644. Run with operator-approved installation privileges.
+
+## Conversational handoff — Core Router
+
+IRC remains the transport/session owner. Incoming private messages and channel
+messages addressed to Ezra are passed unchanged (after protocol-level address
+extraction) to the Core-owned `digit.router.dispatch` service. IRC does not
+select the destination capability, invoke the Ollama model, or interpret content.
+
+Core resolves explicit `/route arguments` destinations against command
+controllers registered by active modules. Ordinary text resolves to a
+registered `chat` controller. Each controller owns its internal operations.
+The module result returns through Core to the originating IRC channel or
+private sender. Unregistered routes and failed controllers return errors;
+IRC records a categorized status without fabricating answers. Message reply
+delivery remains channel-specific, and IRC line sanitization remains in IRC.
+
+This change requires synchronized Core and IRC installation; no independent
+deployment or live acceptance has been verified.
+
+## v1.1.0 — Core Router handoff (2026-10-27)
+
+Removed direct IRC-to-Ollama dispatch. Incoming addressed text now enters the
+Core Router via the existing ABI service-invocation callback. IRC transport
+reconnection and outbound message services are unchanged.
+
+## v1.0.8 — IRC startup failure diagnostics (2026-10-26)
+
+IRC startup now records safe, categorized server numeric failures (nickname conflicts, server bans, SASL errors, and channel admission failures), a server ERROR indicator with its untrusted text withheld, and socket poll/TLS read failures. Raw IRC messages, SASL payloads, credentials, and account passwords are never logged by these diagnostics. The existing 30-second authenticated-channel startup gate and reconnect policy remain unchanged. Qualification and live server admission are not yet verified after this source update.
+
+## v1.0.9 — Two-channel IRC configuration (2026-10-26)
+
+Use `EZRA_IRC_CHANNEL=#stn-labz,#another-channel` to join two channels; the single-channel form remains supported. There must be no whitespace between names. Each channel is tracked separately for join completion and KICK recovery. Addressed replies return to their source channel, while the generic module channel-deliver service retains the first channel as its default. The existing startup gate requires both channels to be joined. Build, qualification, and live dual-channel behavior are not yet verified.
+
+## v1.0.10 — Incoming message handling (2026-10-26)
+
+The IRC PRIVMSG parser now accepts tagged or untagged IRCv3 messages and nick-only as well as nick!user@host source prefixes. The TLS read loop processes data already buffered by OpenSSL with `SSL_pending()`. Incoming PRIVMSG rejection paths produce reason-category logs (parse failure, unconfigured channel, not directly addressed, or unavailable LLM host); message contents and credentials are not logged. All configured channels retain individual response routing. Source self-tests cover nick-only prefixes, IRCv3 tags, second-channel traffic, and rejected non-PRIVMSG commands. Build, self-test execution, and a live IRC/Ollama round trip still require verification on the target host.
+
+
+Ezra port: compile with `make -C modules/irc`. Deployment and activation require separate operator action.

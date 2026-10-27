@@ -1,0 +1,153 @@
+#define _POSIX_C_SOURCE 200809L
+#include <curl/curl.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include "stnlabz_abi/module.h"
+#include "ezra_llm.h"
+#include "ollama_internal.h"
+
+#define OLLAMA_VERSION_MAJOR 1U
+#define OLLAMA_VERSION_MINOR 0U
+#define OLLAMA_VERSION_PATCH 4U
+
+typedef struct { char *data; size_t used; size_t capacity; } buffer_t;
+static const stnlabz_module_host_t *owner;
+static int service_registered;
+static int command_registered;
+
+static size_t write_cb(void *contents,size_t size,size_t nmemb,void *ctx)
+{
+ buffer_t *b=ctx; size_t bytes,need; char *next;
+ if(!b||!contents||!size||!nmemb||nmemb>SIZE_MAX/size)return 0;
+ bytes=size*nmemb;
+ if(b->used>EZRA_OLLAMA_HTTP_MAX||bytes>EZRA_OLLAMA_HTTP_MAX-b->used)return 0;
+ need=b->used+bytes+1U;
+ if(need>b->capacity){
+  size_t cap=b->capacity?b->capacity:4096U;
+  while(cap<need){ if(cap>=EZRA_OLLAMA_HTTP_MAX/2U){cap=EZRA_OLLAMA_HTTP_MAX+1U;break;} cap*=2U; }
+  if(cap>EZRA_OLLAMA_HTTP_MAX+1U)return 0;
+  next=realloc(b->data,cap); if(!next)return 0; b->data=next;b->capacity=cap;
+ }
+ memcpy(b->data+b->used,contents,bytes);b->used+=bytes;b->data[b->used]=0;return bytes;
+}
+
+static stnlabz_module_result_t generate(const void *request,size_t request_size,
+ void *response,size_t response_size,size_t *used,void *ctx)
+{
+ const ezra_llm_request_t *in=request; ezra_llm_response_t *out=response;
+ CURL *curl=NULL; struct curl_slist *headers=NULL; CURLcode rc; long status=0;
+ char body[4096]; buffer_t received={0}; (void)ctx;
+ if(used)*used=0;
+ if(!in||request_size!=sizeof(*in)||!out||response_size<sizeof(*out)||
+    !memchr(in->prompt,0,sizeof in->prompt)||!in->prompt[0])
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ memset(out,0,sizeof(*out));
+ if(!ezra_ollama_build_request(in->prompt,body,sizeof body))
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ curl=curl_easy_init(); if(!curl)return STNLABZ_MODULE_ERR_START_FAILED;
+ headers=curl_slist_append(headers,"Content-Type: application/json");
+ curl_easy_setopt(curl,CURLOPT_URL,EZRA_OLLAMA_ENDPOINT);
+ curl_easy_setopt(curl,CURLOPT_HTTPHEADER,headers);
+ curl_easy_setopt(curl,CURLOPT_POSTFIELDS,body);
+ curl_easy_setopt(curl,CURLOPT_POSTFIELDSIZE,(long)strlen(body));
+ curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,write_cb);
+ curl_easy_setopt(curl,CURLOPT_WRITEDATA,&received);
+ curl_easy_setopt(curl,CURLOPT_CONNECTTIMEOUT_MS,1000L);
+ curl_easy_setopt(curl,CURLOPT_TIMEOUT_MS,30000L);
+ rc=curl_easy_perform(curl);
+ if(rc==CURLE_OK)(void)curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&status);
+ curl_slist_free_all(headers);curl_easy_cleanup(curl);
+ if(rc!=CURLE_OK||status!=200L||!received.data){
+  fprintf(stderr,"[OLLAMA] request failed curl=%d http=%ld\n",(int)rc,status);
+  free(received.data); return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ if(!ezra_ollama_extract_response(received.data,out->text,sizeof out->text)){
+  fprintf(stderr,"[OLLAMA] response parse failed bytes=%zu\n",received.used);
+  free(received.data); return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ fprintf(stderr,"[OLLAMA] generation complete bytes=%zu\n",received.used);
+ free(received.data);
+ if(used)*used=sizeof(*out);
+ return STNLABZ_MODULE_OK;
+}
+
+/* This transport registers its own controller route. Core never chooses Ollama. */
+static stnlabz_module_result_t chat_controller(
+    const stnlabz_module_command_t *command,
+    stnlabz_module_command_reply_fn reply,
+    void *reply_context, void *handler_context)
+{
+    ezra_llm_request_t in;
+    ezra_llm_response_t out;
+    size_t used = 0U;
+    size_t len;
+    stnlabz_module_result_t result;
+    (void)handler_context;
+    if (!command || !reply ||
+        !memchr(command->arguments, 0, sizeof command->arguments))
+        return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    len = strlen(command->arguments);
+    if (!len || len >= sizeof in.prompt)
+        return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    memset(&in, 0, sizeof in);
+    memset(&out, 0, sizeof out);
+    memcpy(in.prompt, command->arguments, len + 1U);
+    result = generate(&in, sizeof in, &out, sizeof out, &used, NULL);
+    if (result != STNLABZ_MODULE_OK) return result;
+    if (used != sizeof out) return STNLABZ_MODULE_ERR_INVALID_STATE;
+    return reply(reply_context, out.text)
+        ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
+}
+
+static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
+{
+ unsigned int e=0,p=0;int ne=0,np=0;int ok;
+ if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ memset(q,0,sizeof(*q));
+ ok=ezra_ollama_run_selftests(&e,&p,&ne,&np);
+ q->tests_executed=e;q->tests_passed=p;q->tests_failed=e-p;
+ q->negative_test_executed=ne;q->negative_test_passed=np;
+ return ok?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
+}
+
+static stnlabz_module_result_t start(const stnlabz_module_host_t *h)
+{
+ if(!h||!h->register_service||!h->unregister_service||
+    !h->register_command||!h->unregister_command)
+    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)
+    return STNLABZ_MODULE_ERR_START_FAILED;
+ if(!h->register_service(EZRA_LLM_GENERATE_SERVICE,generate,NULL)){
+    curl_global_cleanup();return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ service_registered=1;
+ if(!h->register_command("chat",chat_controller,NULL)){
+    (void)h->unregister_service(EZRA_LLM_GENERATE_SERVICE,NULL);
+    service_registered=0;curl_global_cleanup();
+    return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ command_registered=1;owner=h;
+ fprintf(stderr,"[OLLAMA] service active model=%s endpoint=%s\n",
+         EZRA_OLLAMA_MODEL,EZRA_OLLAMA_ENDPOINT);
+ return STNLABZ_MODULE_OK;
+}
+
+static stnlabz_module_result_t stop(void)
+{
+ if(command_registered&&owner)
+   (void)owner->unregister_command("chat",NULL);
+ command_registered=0;
+ if(service_registered&&owner)
+   (void)owner->unregister_service(EZRA_LLM_GENERATE_SERVICE,NULL);
+ service_registered=0;owner=NULL;curl_global_cleanup();
+ return STNLABZ_MODULE_OK;
+}
+
+static const stnlabz_module_descriptor_t descriptor={
+ "ollama","Ezra Ollama LLM",OLLAMA_VERSION_MAJOR,OLLAMA_VERSION_MINOR,
+ OLLAMA_VERSION_PATCH,STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
+ qualify,start,stop
+};
+const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){return &descriptor;}
