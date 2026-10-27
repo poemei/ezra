@@ -65,7 +65,7 @@ $(BUILD_DIR)/abi/%.o: $(ABI_SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
-# Install Core and both mission-independent connectivity modules.
+# Install Core, connectivity modules and the independent Sentinel observer.
 # Run the installed executable from PREFIX: its development log and module
 # paths are relative to the current working directory.
 install: $(TARGET)
@@ -81,6 +81,7 @@ install: $(TARGET)
 install-modules:
 	$(MAKE) -C modules/irc install PREFIX="$(PREFIX)" MODULE_USER="$(INSTALL_USER)" MODULE_GROUP="$(INSTALL_GROUP)"
 	$(MAKE) -C modules/ollama install PREFIX="$(PREFIX)" MODULE_USER="$(INSTALL_USER)" MODULE_GROUP="$(INSTALL_GROUP)"
+	$(MAKE) -C modules/sentinel install PREFIX="$(PREFIX)" MODULE_USER="$(INSTALL_USER)" MODULE_GROUP="$(INSTALL_GROUP)"
 
 # Preserve any existing unit, including administrator customizations.
 # The installer never starts or restarts an agent.
