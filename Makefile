@@ -31,6 +31,8 @@ CONFIGDIR ?= $(PREFIX)/config
 STATEDIR ?= $(PREFIX)/state
 INSTALL_USER ?= $(shell stat -c %U .)
 INSTALL_GROUP ?= $(shell stat -c %G .)
+SYSTEMD_DIR ?= /etc/systemd/system
+SERVICE_NAME ?= ezra.service
 
 
 CORE_SRCS := $(sort $(wildcard src/*.c))
@@ -40,7 +42,7 @@ ABI_OBJS := $(patsubst $(ABI_SRC_DIR)/%.c,$(BUILD_DIR)/abi/%.o,$(ABI_SRCS))
 OBJS := $(CORE_OBJS) $(ABI_OBJS)
 DEPS := $(OBJS:.o=.d)
 
-.PHONY: all clean install install-modules
+.PHONY: all clean install install-modules install-service
 all: $(TARGET)
 
 .PHONY: check-abi
@@ -73,11 +75,30 @@ install: $(TARGET)
 	install -d -o "$(INSTALL_USER)" -g "$(INSTALL_GROUP)" -m 0750 "$(LOGDIR)" "$(AUTHDIR)"
 	install -m 0755 "$(TARGET)" "$(BINDIR)/ezra"
 	$(MAKE) install-modules
+	$(MAKE) install-service
 	@echo "Installed Ezra in $(PREFIX). Run with: cd $(PREFIX) && ./bin/ezra"
 
 install-modules:
 	$(MAKE) -C modules/irc install PREFIX="$(PREFIX)" MODULE_USER="$(INSTALL_USER)" MODULE_GROUP="$(INSTALL_GROUP)"
 	$(MAKE) -C modules/ollama install PREFIX="$(PREFIX)" MODULE_USER="$(INSTALL_USER)" MODULE_GROUP="$(INSTALL_GROUP)"
+
+# Preserve any existing unit, including administrator customizations.
+# The installer never starts or restarts an agent.
+install-service:
+	@if test -e "$(SYSTEMD_DIR)/$(SERVICE_NAME)" || test -L "$(SYSTEMD_DIR)/$(SERVICE_NAME)"; then \
+		echo "Existing $(SYSTEMD_DIR)/$(SERVICE_NAME): skipping service installation and systemctl changes"; \
+	else \
+		command -v systemctl >/dev/null 2>&1 || { echo "ERROR: systemd/systemctl is required" >&2; exit 1; }; \
+		install -d -m 0755 "$(SYSTEMD_DIR)" || exit 1; \
+		sed -e 's|@PREFIX@|$(PREFIX)|g' \
+		    -e 's|@INSTALL_USER@|$(INSTALL_USER)|g' \
+		    -e 's|@INSTALL_GROUP@|$(INSTALL_GROUP)|g' \
+		    service/ezra.service.in > "$(SYSTEMD_DIR)/$(SERVICE_NAME)" || exit 1; \
+		chmod 0644 "$(SYSTEMD_DIR)/$(SERVICE_NAME)" || exit 1; \
+		systemctl daemon-reload || exit 1; \
+		systemctl enable "$(SERVICE_NAME)" || exit 1; \
+		echo "Created and enabled $(SERVICE_NAME); not started"; \
+	fi
 
 clean:
 	rm -rf $(BUILD_DIR) $(TARGET)

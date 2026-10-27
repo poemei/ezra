@@ -1,0 +1,19 @@
+[Unit]
+Description=Ezra AI Core
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@INSTALL_USER@
+Group=@INSTALL_GROUP@
+WorkingDirectory=@PREFIX@
+ExecStart=@PREFIX@/bin/ezra
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0027
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
