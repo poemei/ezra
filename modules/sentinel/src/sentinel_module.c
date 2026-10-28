@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include "stnlabz_abi/module.h"
 #include "ezra_transport.h"
+#include "sentinel_quarantine.h"
 
 #define SENTINEL_LOG "/var/log/sentinel/sentinel.log"
 #define SENTINEL_STATE "./state/sentinel.state"
@@ -127,6 +128,8 @@ static int inspect(checkpoint_t *cp)
     int initial = !cp->initial_sent;
     int changed = 0;
     int needs_report = 0;
+    sentinel_quarantine_diff_t quarantine = {0};
+    int quarantine_ready = 0;
 
     fp = fopen(SENTINEL_LOG, "r");
     if (!fp) {
@@ -179,10 +182,37 @@ static int inspect(checkpoint_t *cp)
             needs_report = 1;
         }
     }
+    if (sentinel_quarantine_check("/var/log/sentinel/quarantine",
+            "./state/sentinel.quarantine", &quarantine)) {
+        quarantine_ready = 1;
+        if (quarantine.new_items > 0) {
+            size_t used = strlen(message);
+            if (!needs_report) {
+                (void)snprintf(message, sizeof message,
+                    "[EZRA/SENTINEL] 4h review: new quarantine items=%u%s%s",
+                    quarantine.new_items,
+                    quarantine.example[0] ? " (example: " : "",
+                    quarantine.example[0] ? quarantine.example : "");
+                if (quarantine.example[0]) {
+                    used = strlen(message);
+                    if (used + 2 < sizeof message) strcat(message, ")");
+                }
+            } else {
+                (void)snprintf(message + used, sizeof message - used,
+                    " New quarantine items=%u.", quarantine.new_items);
+            }
+            needs_report = 1;
+        }
+    } else {
+        fputs("[SENTINEL] Quarantine inventory unavailable; checkpoint withheld\n", stderr);
+        return 0;
+    }
     if (needs_report && !send_report(message)) {
         fputs("[SENTINEL] Report delivery unavailable; retrying next check\n", stderr);
         return 0;
     }
+    if (quarantine_ready && !sentinel_quarantine_commit(&quarantine,
+            "./state/sentinel.quarantine")) return 0;
     (void)changed;
     cp->offset = (unsigned long long)pos;
     cp->inode = (unsigned long long)st.st_ino;
@@ -274,7 +304,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor = {
-    "sentinel", "Ezra Sentinel Observer", 1, 0, 0,
+    "sentinel", "Ezra Sentinel Observer", 1, 1, 0,
     STNLABZ_MODULE_API_MAJOR, STNLABZ_MODULE_API_MINOR,
     qualify, start, stop
 };

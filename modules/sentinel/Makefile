@@ -6,13 +6,19 @@ PREFIX ?= /opt/ezra
 MODULE_USER ?= $(shell id -un)
 MODULE_GROUP ?= $(shell id -gn)
 MODULEDIR ?= $(PREFIX)/modules/sentinel
-CPPFLAGS += -I$(ROOT)/include -I$(ROOT)/../ABI/includes
-.PHONY: all clean install
+CPPFLAGS += -Iinclude -I$(ROOT)/include -I$(ROOT)/../ABI/includes
+.PHONY: all clean test install
 all: build/sentinel.so
-build/sentinel.so: src/sentinel_module.c
+build/sentinel.so: src/sentinel_module.c src/sentinel_quarantine.c include/sentinel_quarantine.h
 	@mkdir -p build
-	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared -o $@ $< -pthread
-install: all
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared -o $@ src/sentinel_module.c src/sentinel_quarantine.c -pthread
+build/test_sentinel: tests/test_sentinel.c src/sentinel_quarantine.c include/sentinel_quarantine.h
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_sentinel.c src/sentinel_quarantine.c
+test: build/test_sentinel
+	./build/test_sentinel
+install:
+	@test -f build/sentinel.so || { echo "ERROR: build first (make clean all test)" >&2; exit 1; }
 	install -d -o "$(MODULE_USER)" -g "$(MODULE_GROUP)" -m 0755 "$(MODULEDIR)"
 	install -o "$(MODULE_USER)" -g "$(MODULE_GROUP)" -m 0644 module.conf "$(MODULEDIR)/module.conf"
 	@set -eu; tmp=$$(mktemp "$(MODULEDIR)/.sentinel.so.XXXXXX"); \
