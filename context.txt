@@ -1,0 +1,107 @@
+PROJECT EZRA — CONTINUITY CONTEXT
+Updated: 2026-11-04 UTC
+Repository: https://github.com/poemei/ezra
+Purpose: Preserve project-specific decisions, demonstrated behavior, working conventions, and outstanding verification across development sessions.
+This is a continuity reference, not new authorization, acceptance, a flight qualification record, or permission for autonomous changes.
+
+IDENTITY AND MISSION
+- Ezra is the Space Automated Agent planned for ST-1 spacecraft mission operations and systems support.
+- Ezra derives from Digit's STN-LABZ-owned Core foundation but is an independent agent with her own mission modules.
+- ST-1's research objective includes Sentinel-Daemon onboard integrity monitoring, enforcement, and recovery; Ezra observes, interprets, and reports within authorized limits.
+- Intended flight behavior includes spacecraft-controller telemetry, authorized coordination, accountable event records, operation during communications outages, and fault recovery.
+- ST-1 must not depend on Ezra being infallible. Essential controllers and Sentinel-Daemon have independent responsibilities.
+- Current terrestrial results do not establish a flight-qualified spacecraft, completed flight hardware, or verified orbital communications.
+
+HUMAN AUTHORITY AND ENGINEERING DISCIPLINE
+- The human developer/operator directs scope, authorization, verification, installation, and acceptance. Discussion or a roadmap item is not permission to implement.
+- Governing project authorization is maintained in docs/AUTHORIZATION.md. Its current human-authored record reads:
+  Project Ezra Authorization
+  Authorized by: P. Mei
+  Status: Approved
+  Company: STN_Labz, LLC.
+  Position: Founder/CEO
+  Mission: Operations / Systems
+  Cert Level: TSC
+  Date/Time: 20261028:1625Z
+- Preserve that authorization record; do not reinterpret its approval as blanket authority for future changes.
+- Principle: "Competency is demonstrated. Root causes are corrected." Do not patch symptoms, invent completion evidence, or claim success from source changes alone.
+- Design preference: small, deterministic, clear, directly traceable, easy to use.
+- When correcting a file, provide the entire corrected file rather than piecemeal fragments.
+- Do not initiate Work for a GitHub repo. Respect direct human control of repository actions and deployment.
+- No unrelated project requirements should be imported without explicit direction.
+
+ARCHITECTURE — CORE IS NOT MODULES
+- Core owns identity/Agent Root validation, generic runtime, logging, policy/authorization boundaries, and generic discovery, qualification, activation, inventory and dispatch infrastructure.
+- Core does not embed mission-specific module behavior or route implementations. Modules register and manage their own commands/routes/services through the common interfaces; Core performs generic dispatch.
+- Digit and Rictus are reference implementations for shared Core behavior. Do not modify either merely to accommodate Ezra.
+- The shared STN-LABZ ABI (stnlabz/ABI, normally ../ABI at build time) remains independent. Ezra-only requirements do not justify modifying it. ABI changes require explicit approval for genuinely cross-project requirements.
+- Maintain a clear distinction between the spacecraft controller, Sentinel-Daemon, and Ezra's AI mission support.
+- Preserve separation between observation and actuation; IRC messages and model text are not inherently authorized spacecraft commands.
+
+REPOSITORY / DEPLOYMENT
+- Linux C Core source under src/ and headers under include/.
+- Main Makefile builds bin/ezra against selected external ABI sources from ../ABI.
+- Module sources: modules/irc, modules/ollama, modules/sentinel.
+- Server development account: stnchain. Installed prefix: /opt/ezra.
+- Installed executable: /opt/ezra/bin/ezra; systemd unit: ezra.service.
+- Core currently uses working-directory-relative logs, module watch, and state paths; systemd WorkingDirectory is /opt/ezra.
+- Installer creates a systemd unit only if it does not exist; existing unit must be left untouched. Installation does not start or restart the service.
+- Elevated permissions are for installing into /opt/ezra and systemd configuration. Ezra's runtime remains non-root under stnchain.
+- Standard per-module workflow, from repo root:
+    make -C modules/<name> clean all test
+    sudo make -C modules/<name> install
+  Build and test before privileged install; do not quietly compile as root. Confirm tests exist and pass; do not invent test results.
+- The earlier Sentinel activation failure was traced to /opt/ezra/state not being writable as stnchain. Operator fixed its ownership/permissions and received a successful initial IRC report. Installer ownership regression deserves attention.
+- Never put passwords, IRC secrets, API keys, or other credentials into this context file.
+
+CURRENT MODULE RESPONSIBILITIES
+IRC
+- TLS/SASL IRC connectivity and transport only; no mission policy or command authority.
+- Operator demonstrated that Ezra joined Libera.Chat as st1_ezra in #stn-labz.
+- Earlier numeric 904 SASL rejection was resolved after correcting the configured account identifier. Do not revisit credentials without actual evidence.
+- IRC service exchanges data through the Core-mediated host service interface.
+
+OLLAMA
+- Separate local language-model generation/chat module; not Core, not a source of verified telemetry or authority.
+- Source exists; do not infer complete end-to-end qualification from presence or activation alone.
+
+SENTINEL OBSERVER
+- Dedicated read-only Ezra module; Sentinel-Daemon itself remains separate and independently operational.
+- Reads /var/log/sentinel/sentinel.log.
+- Reads the inventory (metadata, not contents) of regular files directly beneath /var/log/sentinel/quarantine.
+- Initial baseline is reported through IRC. Subsequent review target is approximately every four hours, reporting meaningful changes only; otherwise stay silent.
+- Logs/process changes are observations, not automatic proof of an attack. Quarantined files must never be executed, opened for content, released, deleted, or distributed by this module.
+- Persists local checkpoint/inventory to avoid repeating reported observations; behavior across rotation, failure and restarts must be tested.
+- Operator observed first baseline:
+    [EZRA/SENTINEL] Initial baseline: entries=101098 processes=124 coverage_errors=0. Monitoring active.
+- Operator later observed a four-hour report:
+    [EZRA/SENTINEL] Changes in 4h review: warnings=0 monitored_files=58 process_exits=48 coverage_errors=0.
+- Operator reports Ezra stays quiet when nothing needs reporting.
+- Quarantine inventory code and focused test target were committed; successful end-to-end quarantine detection/notification has not been independently evidenced here.
+
+VERIFICATION AND ACCOUNTABILITY
+- Distinguish: source committed vs built vs unit tests passed vs Core qualification green vs module activated vs live behavior observed vs human accepted.
+- Existing operator evidence: Core built and ran; IRC connected and joined; Sentinel baseline and later change summary arrived in IRC.
+- Automated Sentinel quarantine tests, four-hour suppression behavior, state recovery, log rotation, credential security, and flight-specific guarantees require explicit evidence; do not claim them accepted merely from code or anecdote.
+- Collect event timestamps, source observations, authorization, attempted action, resulting state, failures, repairs and retest evidence.
+- Preserve original records; new interpretations must not overwrite observations.
+- Sentinel-Daemon continues enforcement/recovery independently of Ezra. A loss of Ezra or ground link must not disable essential spacecraft functions.
+
+ST-1 DEVELOPMENT DIRECTION
+- Planned purchase/research: educational CubeSat (MySat Space Fan Kit) and Raspberry Pi/Linux development computer(s) for bench integration and early hardware-in-the-loop experiments. These are prototypes, not established flight components.
+- Environmental and fault campaigns may include controlled power interruptions, cold/wet exposure, condensation, controller failures, RF communication loss, recovery, and independent evidence collection.
+- Solar flux / geomagnetic indices and HF propagation are separate research streams, not proof of flight-like radiation tolerance or the actual ST-1 communications architecture.
+- Goal: bring measured, repeatable engineering evidence and failures to potential University of Washington collaborators.
+- Record hardware/software revisions, instrumentation, test methods, observed failures, root causes, changes and retests.
+- Flight communications provider, architecture, qualified flight hardware and acceptance remain open. Do not equate educational hardware tests with environmental qualification for orbit.
+
+DOCUMENTATION AND HANDOFF
+- docs/CHANGELOG.md: chronology, fixed defects and evidence.
+- docs/ROADMAP.md: proposed progression, not implementation authorization.
+- docs/MODULES.md: independent module ownership, boundaries, workflow and limitations.
+- docs/AUTHORIZATION.md: human-approved authorization record; preserve verbatim unless directed.
+- The root README.md contains some older early-Core status statements. Confirm against actual current source and operator evidence before using it as a status authority.
+- For new module work, consult the supplied example.zip, MODULE_CREATION_GUIDE.md, AGENTS.md and 20261016.0_AI_MODULE_CREATION.md (available in the project materials, not necessarily this repo) before implementation.
+- Do not assume a tool can access prior conversations; update this file only when explicitly asked, and distinguish observations from projections.
+
+END OF CONTEXT
