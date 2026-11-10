@@ -10,6 +10,7 @@
 
 typedef struct {
     char name[STNLABZ_MODULE_SERVICE_NAME_MAX];
+    char owner[STNLABZ_MODULE_ID_MAX];
     stnlabz_module_service_handler_fn handler;
     void *context;
     unsigned int in_flight;
@@ -18,6 +19,7 @@ typedef struct {
 
 typedef struct {
     char name[STNLABZ_MODULE_COMMAND_NAME_MAX];
+    char owner[STNLABZ_MODULE_ID_MAX];
     stnlabz_module_command_handler_fn handler;
     void *context;
     unsigned int in_flight;
@@ -28,6 +30,7 @@ static ezra_service_entry_t services[EZRA_HOST_SERVICE_MAX];
 static ezra_command_entry_t commands[EZRA_HOST_COMMAND_MAX];
 static atomic_flag service_lock = ATOMIC_FLAG_INIT;
 static atomic_flag command_lock = ATOMIC_FLAG_INIT;
+static _Thread_local char registering_module[STNLABZ_MODULE_ID_MAX];
 /* A callback cannot synchronously withdraw itself: its own in_flight
  * reference would make unregister wait forever. Keep a per-thread stack
  * to catch both direct and nested reentrant withdrawal attempts. */
@@ -76,6 +79,21 @@ static void unlock(atomic_flag *flag)
     atomic_flag_clear_explicit(flag, memory_order_release);
 }
 
+void ezra_module_host_begin_registration(const char *module_id)
+{
+    size_t length;
+    registering_module[0] = '\0';
+    if (!module_id) return;
+    length = bounded_length(module_id, sizeof registering_module);
+    if (!length || length >= sizeof registering_module) return;
+    memcpy(registering_module, module_id, length + 1U);
+}
+
+void ezra_module_host_end_registration(void)
+{
+    registering_module[0] = '\0';
+}
+
 static int register_service(const char *name,
                             stnlabz_module_service_handler_fn handler,
                             void *context)
@@ -103,6 +121,9 @@ static int register_service(const char *name,
     }
 
     memcpy(services[free_slot].name, name, length + 1U);
+    if (registering_module[0])
+        memcpy(services[free_slot].owner, registering_module,
+               strlen(registering_module) + 1U);
     services[free_slot].handler = handler;
     services[free_slot].context = context;
     unlock(&service_lock);
@@ -263,6 +284,9 @@ static int register_command(const char *name,
     }
 
     memcpy(commands[free_slot].name, name, length + 1U);
+    if (registering_module[0])
+        memcpy(commands[free_slot].owner, registering_module,
+               strlen(registering_module) + 1U);
     commands[free_slot].handler = handler;
     commands[free_slot].context = context;
     unlock(&command_lock);
